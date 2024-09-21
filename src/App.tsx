@@ -1,9 +1,7 @@
+import Sheet from './components/Sheet';
+
 const App = () => {
-  return (
-    <div>
-      <h1>Hello World</h1>
-    </div>
-  );
+  return <Sheet />;
 };
 
 export default App;
