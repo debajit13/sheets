@@ -41,3 +41,18 @@ export const resizeCanvas = (canvas: HTMLCanvasElement) => {
   const context = canvas.getContext('2d');
   context?.scale(ratio, ratio);
 };
+
+/**
+ * take number as parameter and return its corresponding alphabets based on logic
+ */
+export const getEncodedCharacter = (num: number) => {
+  let result = '';
+
+  while (num > 0) {
+    const rem = (num - 1) % 26; // 0 to 25
+    result = String.fromCharCode(65 + rem) + result;
+    num = Math.round((num - 1) / 26);
+  }
+
+  return result;
+};
