@@ -3,14 +3,16 @@
  */
 export const calculateRowsAndCloumnsToDisplay = (
   size: number,
-  visibleArea: number
+  visibleArea: number,
+  offset: number,
+  cellOffset: number
 ) => {
   const visible: number[] = [];
   const start: number[] = [];
   const end: number[] = [];
 
-  let index = 0;
-  let nextStart = 0;
+  let index = cellOffset;
+  let nextStart = offset;
 
   while (nextStart < visibleArea) {
     visible.push(index);
