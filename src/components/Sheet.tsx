@@ -24,16 +24,53 @@ const Sheet = () => {
   // state for canvas height and width
   const [canvasWidth, setCanvasWidth] = useState<number>(window.innerWidth);
   const [canvasHeight, setCanvasHeight] = useState<number>(window.innerHeight);
+  const [cellsOffset, setCellsOffset] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [maxScrollArea, setMaxScrollArea] = useState<{ x: number; y: number }>({
+    x: 3000,
+    y: 3000,
+  });
 
   // calculate number of columns, start point and end point for each column
   const { visible: visibleColumns } = calculateRowsAndCloumnsToDisplay(
     cellWidth,
-    canvasWidth
+    canvasWidth,
+    rowHeaderWidth,
+    cellsOffset.x
   );
   const { visible: visibleRows } = calculateRowsAndCloumnsToDisplay(
     cellHeight,
-    canvasHeight
+    canvasHeight,
+    columnHeaderHeight,
+    cellsOffset.y
   );
+
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement; // cast target to HTMLDivElement
+    const scrollX = target.scrollLeft;
+    const scrollY = target.scrollTop;
+
+    const cellsOffsetInX = Math.floor(scrollX / cellWidth);
+    const cellsOffsetInY = Math.floor(scrollY / cellHeight);
+
+    setCellsOffset({
+      x: cellsOffsetInX,
+      y: cellsOffsetInY,
+    });
+
+    const newMaxScrollArea = { ...maxScrollArea };
+    if (newMaxScrollArea.x / scrollX < 1) {
+      maxScrollArea.x *= 1.5;
+    }
+
+    if (newMaxScrollArea.y / scrollY < 1) {
+      newMaxScrollArea.y *= 1.5;
+    }
+
+    setMaxScrollArea({ ...newMaxScrollArea });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -125,7 +162,7 @@ const Sheet = () => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasHeight, canvasWidth]);
+  }, [canvasHeight, canvasWidth, cellsOffset.x, cellsOffset.y]);
 
   useEffect(() => {
     const resizeCanvas = () => {
@@ -140,8 +177,15 @@ const Sheet = () => {
   }, []);
 
   return (
-    <div className='w-screen h-screen'>
+    <div className='w-screen h-screen relative  overflow-hidden'>
       <canvas ref={canvasRef} height={canvasHeight} width={canvasWidth} />
+      <div
+        className='absolute w-full h-full top-0 left-0 overflow-scroll'
+        onScroll={onScroll}
+      >
+        <div className={`w-[${maxScrollArea.x + 2000}px] h-[1px]`} />
+        <div className={`w-[1px] h-[${maxScrollArea.y + 2000}px]`} />
+      </div>
     </div>
   );
 };
