@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Change } from './types/types';
 import Sheet from './components/Sheet';
+import Header from './components/layout/Header';
 
 const initialData: string[][] = localStorage.getItem('displayData')
   ? JSON.parse(localStorage.getItem('displayData') as string)
@@ -15,6 +16,7 @@ for (let row = 0; row < 2000; row++) {
 
 const App = () => {
   const [displayData, setDisplayData] = useState<string[][]>(initialData);
+  const headerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     localStorage.setItem('displayData', JSON.stringify(displayData));
@@ -31,7 +33,16 @@ const App = () => {
     setDisplayData(newData);
   };
 
-  return <Sheet displayData={displayData} onChange={onChange} />;
+  return (
+    <div className='flex flex-col h-screen'>
+      <Header ref={headerRef} />
+      <Sheet
+        headerRef={headerRef}
+        displayData={displayData}
+        onChange={onChange}
+      />
+    </div>
+  );
 };
 
 export default App;
