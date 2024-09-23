@@ -3,6 +3,9 @@ import { Change } from './types/types';
 import Sheet from './components/Sheet';
 import Header from './components/layout/Header';
 
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 const initialData: string[][] = localStorage.getItem('displayData')
   ? JSON.parse(localStorage.getItem('displayData') as string)
   : [];
@@ -34,14 +37,17 @@ const App = () => {
   };
 
   return (
-    <div className='flex flex-col h-screen'>
-      <Header ref={headerRef} />
-      <Sheet
-        headerRef={headerRef}
-        displayData={displayData}
-        onChange={onChange}
-      />
-    </div>
+    <>
+      <ToastContainer />
+      <div className='flex flex-col h-screen'>
+        <Header ref={headerRef} />
+        <Sheet
+          headerRef={headerRef}
+          displayData={displayData}
+          onChange={onChange}
+        />
+      </div>
+    </>
   );
 };
 
