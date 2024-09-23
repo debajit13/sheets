@@ -1,29 +1,36 @@
 import { useRef, useEffect, useState } from 'react';
+import data from '../constants/data';
+import logo from '../assets/logo.png';
 import {
   calculateRowsAndColumnsToDisplay,
   resizeCanvas,
   getEncodedCharacter,
 } from '../utils/utils';
-import { Change, CoordinateType } from '../types/types';
+import {
+  Change,
+  CoordinateType,
+  SelectionCoordinatesType,
+} from '../types/types';
 
 // constant values
-const cellWidth = 100;
-const cellHeight = 22;
-
-const rowHeaderWidth = 50;
-const columnHeaderHeight = 22;
-
-const headerColor = '#f8f9fa';
-const gridLineColor = '#e2e3e3';
-const headerTextColor = '#666666';
-const selectionColor = '#e9f0fd';
-const selectionBorderColor = '#1b73e7';
+const {
+  cellHeight,
+  cellWidth,
+  rowHeaderWidth,
+  columnHeaderHeight,
+  headerColor,
+  headerTextColor,
+  selectionBorderColor,
+  selectionColor,
+  gridLineColor,
+} = data;
 
 const Sheet: React.FC<{
   displayData: string[][];
   onChange: (changes: Change[]) => void;
 }> = (props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
 
   const [canvasWidth, setCanvasWidth] = useState<number>(window.innerWidth);
   const [canvasHeight, setCanvasHeight] = useState<number>(window.innerHeight);
@@ -38,7 +45,7 @@ const Sheet: React.FC<{
 
   const [selectionInProgress, setSelectionInProgress] =
     useState<boolean>(false);
-  const [selection, setSelection] = useState({
+  const [selection, setSelection] = useState<SelectionCoordinatesType>({
     x1: -1,
     y1: -1,
     x2: -1,
@@ -47,6 +54,9 @@ const Sheet: React.FC<{
 
   const [editCell, setEditCell] = useState<CoordinateType>({ x: -1, y: -1 });
   const [editValue, setEditValue] = useState<string>('');
+  const [fileName, setFileName] = useState<string>(
+    localStorage.getItem('fileName') ?? ''
+  );
 
   const {
     visible: visibleColumns,
@@ -69,6 +79,10 @@ const Sheet: React.FC<{
     columnHeaderHeight,
     cellsOffset.y
   );
+
+  const getHeaderHeight = (): number => {
+    return headerRef.current ? headerRef.current.offsetHeight : 0;
+  };
 
   const coordinateToCell = (x: number, y: number) => {
     let cellX = 0;
@@ -324,7 +338,7 @@ const Sheet: React.FC<{
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
     const x = e.clientX;
-    const y = e.clientY;
+    const y = e.clientY - getHeaderHeight(); // Adjust for the header height;
 
     setSelectionInProgress(true);
 
@@ -336,7 +350,7 @@ const Sheet: React.FC<{
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
     const x = e.clientX;
-    const y = e.clientY;
+    const y = e.clientY - getHeaderHeight(); // Adjust for the header height;
 
     if (selectionInProgress) {
       const sel2 = coordinateToCell(x, y);
@@ -350,7 +364,7 @@ const Sheet: React.FC<{
 
   const onDoubleClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
     const x = e.clientX;
-    const y = e.clientY;
+    const y = e.clientY - getHeaderHeight(); // Adjust for the header height;
 
     const cell = coordinateToCell(x, y);
     setEditCell({ x: cell.x, y: cell.y });
@@ -434,59 +448,101 @@ const Sheet: React.FC<{
   }
 
   return (
-    <div
-      style={{
-        height: '100vh',
-        width: '100vw',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <canvas ref={canvasRef} style={{ height: '100%', width: '100%' }} />
+    <div>
+      <header
+        ref={headerRef}
+        className='flex w-full justify-between'
+        id='header'
+      >
+        <img src={logo} height={'50px'} width={'50px'} />
+        <input
+          value={fileName}
+          onChange={(e) => {
+            setFileName(e.target.value);
+          }}
+          type='text'
+          className='ml-3 focus-visible:outline-0'
+          placeholder='Enter the file name...'
+        />
+        <div className='btn-container'>
+          <button
+            onClick={() => {
+              localStorage.setItem('fileName', fileName);
+            }}
+            className='bg-[#bcbcbc] p-2 text-[#292929] '
+          >
+            Save Data
+          </button>
+          <button
+            className='text-[#bcbcbc] p-2 bg-[#292929]'
+            onClick={() => {
+              localStorage.clear();
+              location.reload();
+            }}
+          >
+            Delete Data
+          </button>
+        </div>
+      </header>
+
       <div
-        onCopy={onCopy}
-        onPaste={onPaste}
-        onScroll={onScroll}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onDoubleClick={onDoubleClick}
         style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          top: 0,
-          left: 0,
-          overflow: 'scroll',
+          height: '100vh',
+          width: '100vw',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {/* For Horizontal Scrolling */}
-        <div style={{ width: maxScrollArea.x + 2000 + 'px', height: '1px' }} />
-        {/* For Vertical Scrolling */}
-        <div style={{ width: '1px', height: maxScrollArea.y + 2000 + 'px' }} />
-      </div>
-
-      {editMode && (
-        <input
-          autoFocus
-          type='text'
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={onCellKeyDown}
+        <canvas ref={canvasRef} style={{ height: '100%', width: '100%' }} />
+        <div
+          onCopy={onCopy}
+          onPaste={onPaste}
+          onScroll={onScroll}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onDoubleClick={onDoubleClick}
           style={{
             position: 'absolute',
-            top: position.y,
-            left: position.x,
-            width: editWidth,
-            height: editHeight,
-            outline: 'none',
-            border: 'none',
-            color: 'black',
-            fontSize: '13px',
-            fontFamily: 'sans-serif',
+            width: '100%',
+            height: '100%',
+            top: 0,
+            left: 0,
+            overflow: 'scroll',
           }}
-        />
-      )}
+        >
+          {/* For Horizontal Scrolling */}
+          <div
+            style={{ width: maxScrollArea.x + 2000 + 'px', height: '1px' }}
+          />
+          {/* For Vertical Scrolling */}
+          <div
+            style={{ width: '1px', height: maxScrollArea.y + 2000 + 'px' }}
+          />
+        </div>
+
+        {editMode && (
+          <input
+            autoFocus
+            type='text'
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={onCellKeyDown}
+            style={{
+              position: 'absolute',
+              top: position.y,
+              left: position.x,
+              width: editWidth,
+              height: editHeight,
+              outline: 'none',
+              border: 'none',
+              color: 'black',
+              fontSize: '13px',
+              fontFamily: 'sans-serif',
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 };
