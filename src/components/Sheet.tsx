@@ -17,11 +17,12 @@ const columnHeaderHeight = 22;
 const headerColor = '#f8f9fa';
 const headerTextColor = '#666666';
 const gridLineColor = '#e2e3e3';
+const selectionColor = '#e9f0fd';
+const selectionBorderColor = '#1b73e7';
 
 const Sheet = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // state for canvas height and width
   const [canvasWidth, setCanvasWidth] = useState<number>(window.innerWidth);
   const [canvasHeight, setCanvasHeight] = useState<number>(window.innerHeight);
   const [cellsOffset, setCellsOffset] = useState<{ x: number; y: number }>({
@@ -32,20 +33,78 @@ const Sheet = () => {
     x: 3000,
     y: 3000,
   });
+  const [selection, setSelection] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  }>({ x1: -1, y1: -1, x2: -1, y2: -1 });
+  const [selectionInProgress, setSelectionInProgress] =
+    useState<boolean>(false);
 
   // calculate number of columns, start point and end point for each column
-  const { visible: visibleColumns } = calculateRowsAndCloumnsToDisplay(
+  const {
+    visible: visibleColumns,
+    start: columnStart,
+    end: columnEnd,
+  } = calculateRowsAndCloumnsToDisplay(
     cellWidth,
     canvasWidth,
     rowHeaderWidth,
     cellsOffset.x
   );
-  const { visible: visibleRows } = calculateRowsAndCloumnsToDisplay(
+  const {
+    visible: visibleRows,
+    start: rowStart,
+    end: rowEnd,
+  } = calculateRowsAndCloumnsToDisplay(
     cellHeight,
     canvasHeight,
     columnHeaderHeight,
     cellsOffset.y
   );
+
+  const coordinateToCell = (x: number, y: number) => {
+    let cellX = 0;
+    let cellY = 0;
+
+    for (let i = 0; i < visibleColumns.length; i++) {
+      if (x >= columnStart[i] && x <= columnEnd[i]) {
+        cellX = visibleColumns[i];
+      }
+    }
+
+    for (let i = 0; i < visibleRows.length; i++) {
+      if (y >= rowStart[i] && y <= rowEnd[i]) {
+        cellY = visibleRows[i];
+      }
+    }
+
+    return {
+      x: cellX,
+      y: cellY,
+    };
+  };
+
+  const cellToCoordinate = (cellX: number, cellY: number) => {
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i < visibleColumns.length; i++) {
+      if (visibleColumns[i] === cellX) {
+        x = columnStart[i];
+        break;
+      }
+    }
+
+    for (let i = 0; i < visibleRows.length; i++) {
+      if (visibleRows[i] === cellY) {
+        y = rowStart[i];
+        break;
+      }
+    }
+
+    return { x, y };
+  };
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement; // cast target to HTMLDivElement
@@ -72,6 +131,37 @@ const Sheet = () => {
     setMaxScrollArea({ ...newMaxScrollArea });
   };
 
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const x = e.clientX;
+    const y = e.clientY;
+
+    setSelectionInProgress(true);
+
+    const sel1 = coordinateToCell(x, y); // point1
+    const sel2 = { ...sel1 }; // point2
+
+    setSelection({
+      x1: sel1.x,
+      y1: sel1.y,
+      x2: sel2.x,
+      y2: sel2.y,
+    });
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const x = e.clientX;
+    const y = e.clientY;
+
+    if (selectionInProgress) {
+      const sel2 = coordinateToCell(x, y);
+      setSelection({ ...selection, x2: sel2.x, y2: sel2.y });
+    }
+  };
+
+  const onMouseUp = () => {
+    setSelectionInProgress(false);
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
@@ -83,6 +173,43 @@ const Sheet = () => {
     if (context) {
       context.fillStyle = '#fff';
       context.fillRect(0, 0, context.canvas.width, context.canvas.height); // set the canvas color
+
+      // selecting cells
+      let selX1 = selection.x1;
+      let selX2 = selection.x2;
+
+      // to make sure if user is selecting from right to left then also x1 < x2
+      if (selection.x1 > selection.x2) {
+        selX1 = selection.x2;
+        selX2 = selection.x1;
+      }
+
+      let selY1 = selection.y1;
+      let selY2 = selection.y2;
+
+      // to make sure if user is selecting from bottom to top then also y1 < y2
+      if (selection.y1 > selection.y2) {
+        selY1 = selection.y2;
+        selY2 = selection.y1;
+      }
+
+      const isSelectionActive =
+        selX1 !== -1 && selY1 !== 1 && selX2 !== -1 && selY2 !== -1;
+
+      const point1 = cellToCoordinate(selX1, selY1);
+      const point2 = cellToCoordinate(selX2, selY2);
+
+      point2.x += cellWidth;
+      point2.y += cellHeight;
+
+      if (isSelectionActive) {
+        const rectWidth = point2.x - point1.x;
+        const rectHeight = point2.y - point1.y;
+
+        context.fillStyle = selectionColor;
+        context.fillRect(point1.x, point1.y, rectWidth, rectHeight);
+      }
+
       context.fillStyle = headerColor; // setup the header color
       context.font = '13px sans-serif';
 
@@ -160,9 +287,18 @@ const Sheet = () => {
         context.stroke();
         startX += cellWidth;
       }
+      if (isSelectionActive) {
+        const rectWidth = point2.x - point1.x;
+        const rectHeight = point2.y - point2.y;
+
+        context.strokeStyle = selectionBorderColor;
+        context.rect(point1.x, point1.y, rectWidth, rectHeight);
+        context.stroke();
+      }
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasHeight, canvasWidth, cellsOffset.x, cellsOffset.y]);
+  }, [canvasHeight, canvasWidth, cellsOffset.x, cellsOffset.y, selection]);
 
   useEffect(() => {
     const resizeCanvas = () => {
@@ -182,6 +318,9 @@ const Sheet = () => {
       <div
         className='absolute w-full h-full top-0 left-0 overflow-scroll'
         onScroll={onScroll}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
       >
         <div className={`w-[${maxScrollArea.x + 2000}px] h-[1px]`} />
         <div className={`w-[1px] h-[${maxScrollArea.y + 2000}px]`} />
