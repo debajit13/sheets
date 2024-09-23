@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
 import data from '../constants/data';
-import logo from '../assets/logo.png';
 import {
   calculateRowsAndColumnsToDisplay,
   resizeCanvas,
@@ -28,9 +27,10 @@ const {
 const Sheet: React.FC<{
   displayData: string[][];
   onChange: (changes: Change[]) => void;
+  headerRef: React.RefObject<HTMLDivElement>;
 }> = (props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const headerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [canvasWidth, setCanvasWidth] = useState<number>(window.innerWidth);
   const [canvasHeight, setCanvasHeight] = useState<number>(window.innerHeight);
@@ -54,9 +54,6 @@ const Sheet: React.FC<{
 
   const [editCell, setEditCell] = useState<CoordinateType>({ x: -1, y: -1 });
   const [editValue, setEditValue] = useState<string>('');
-  const [fileName, setFileName] = useState<string>(
-    localStorage.getItem('fileName') ?? ''
-  );
 
   const {
     visible: visibleColumns,
@@ -81,7 +78,7 @@ const Sheet: React.FC<{
   );
 
   const getHeaderHeight = (): number => {
-    return headerRef.current ? headerRef.current.offsetHeight : 0;
+    return props.headerRef.current ? props.headerRef.current.offsetHeight : 0;
   };
 
   const coordinateToCell = (x: number, y: number) => {
@@ -123,6 +120,22 @@ const Sheet: React.FC<{
 
     return { x, y };
   };
+
+  useEffect(() => {
+    // Adjust canvas height based on header height
+    const updateCanvasSize = () => {
+      const headerHeight = getHeaderHeight();
+      if (containerRef.current) {
+        setCanvasHeight(window.innerHeight - headerHeight); // Ensure the canvas height is based on viewport minus header height
+      }
+    };
+
+    window.addEventListener('resize', updateCanvasSize);
+    updateCanvasSize(); // Initial adjustment
+
+    return () => window.removeEventListener('resize', updateCanvasSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.headerRef]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -448,101 +461,60 @@ const Sheet: React.FC<{
   }
 
   return (
-    <div>
-      <header
-        ref={headerRef}
-        className='flex w-full justify-between'
-        id='header'
-      >
-        <img src={logo} height={'50px'} width={'50px'} />
-        <input
-          value={fileName}
-          onChange={(e) => {
-            setFileName(e.target.value);
-          }}
-          type='text'
-          className='ml-3 focus-visible:outline-0'
-          placeholder='Enter the file name...'
-        />
-        <div className='btn-container'>
-          <button
-            onClick={() => {
-              localStorage.setItem('fileName', fileName);
-            }}
-            className='bg-[#bcbcbc] p-2 text-[#292929] '
-          >
-            Save Data
-          </button>
-          <button
-            className='text-[#bcbcbc] p-2 bg-[#292929]'
-            onClick={() => {
-              localStorage.clear();
-              location.reload();
-            }}
-          >
-            Delete Data
-          </button>
-        </div>
-      </header>
-
+    <div
+      ref={containerRef}
+      style={{
+        height: '100vh',
+        width: '100vw',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <canvas ref={canvasRef} style={{ height: '100%', width: '100%' }} />
       <div
+        onCopy={onCopy}
+        onPaste={onPaste}
+        onScroll={onScroll}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onDoubleClick={onDoubleClick}
         style={{
-          height: '100vh',
-          width: '100vw',
-          position: 'relative',
-          overflow: 'hidden',
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          top: 0,
+          left: 0,
+          overflow: 'scroll',
         }}
       >
-        <canvas ref={canvasRef} style={{ height: '100%', width: '100%' }} />
-        <div
-          onCopy={onCopy}
-          onPaste={onPaste}
-          onScroll={onScroll}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onDoubleClick={onDoubleClick}
+        {/* For Horizontal Scrolling */}
+        <div style={{ width: maxScrollArea.x + 2000 + 'px', height: '1px' }} />
+        {/* For Vertical Scrolling */}
+        <div style={{ width: '1px', height: maxScrollArea.y + 2000 + 'px' }} />
+      </div>
+
+      {editMode && (
+        <input
+          autoFocus
+          type='text'
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={onCellKeyDown}
           style={{
             position: 'absolute',
-            width: '100%',
-            height: '100%',
-            top: 0,
-            left: 0,
-            overflow: 'scroll',
+            top: position.y,
+            left: position.x,
+            width: editWidth,
+            height: editHeight,
+            outline: 'none',
+            border: 'none',
+            color: 'black',
+            fontSize: '13px',
+            fontFamily: 'sans-serif',
           }}
-        >
-          {/* For Horizontal Scrolling */}
-          <div
-            style={{ width: maxScrollArea.x + 2000 + 'px', height: '1px' }}
-          />
-          {/* For Vertical Scrolling */}
-          <div
-            style={{ width: '1px', height: maxScrollArea.y + 2000 + 'px' }}
-          />
-        </div>
-
-        {editMode && (
-          <input
-            autoFocus
-            type='text'
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={onCellKeyDown}
-            style={{
-              position: 'absolute',
-              top: position.y,
-              left: position.x,
-              width: editWidth,
-              height: editHeight,
-              outline: 'none',
-              border: 'none',
-              color: 'black',
-              fontSize: '13px',
-              fontFamily: 'sans-serif',
-            }}
-          />
-        )}
-      </div>
+        />
+      )}
     </div>
   );
 };
