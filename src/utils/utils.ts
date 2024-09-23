@@ -1,59 +1,55 @@
-/**
- * calculate the possible array of rows, columns and their start and end points array in your display
- */
-export const calculateRowsAndCloumnsToDisplay = (
+import { VisibleResult } from '../types/types';
+
+// calculateRowsAndColumnsToDisplay function with type annotations
+export const calculateRowsAndColumnsToDisplay = (
   size: number,
   visibleArea: number,
   offset: number,
   cellOffset: number
-) => {
+): VisibleResult => {
   const visible: number[] = [];
   const start: number[] = [];
   const end: number[] = [];
 
-  let index = cellOffset;
+  let idx = cellOffset;
   let nextStart = offset;
 
   while (nextStart < visibleArea) {
-    visible.push(index);
+    visible.push(idx);
     start.push(nextStart);
     end.push(nextStart + size);
 
-    index++;
+    idx++;
     nextStart += size;
   }
 
   return { visible, start, end };
 };
 
-/**
- * resize the canvas width and height based on device pixel ratio
- */
+// resizeCanvas function with type annotations
 export const resizeCanvas = (canvas: HTMLCanvasElement) => {
   const { width, height } = canvas.getBoundingClientRect();
-
   const ratio = window.devicePixelRatio;
 
   const newCanvasWidth = Math.round(width * ratio);
   const newCanvasHeight = Math.round(height * ratio);
 
-  canvas.width = newCanvasWidth;
-  canvas.height = newCanvasHeight;
-
   const context = canvas.getContext('2d');
-  context?.scale(ratio, ratio);
+  if (context) {
+    canvas.width = newCanvasWidth;
+    canvas.height = newCanvasHeight;
+    context.scale(ratio, ratio);
+  }
 };
 
-/**
- * take number as parameter and return its corresponding alphabets based on logic
- */
-export const getEncodedCharacter = (num: number) => {
+// getEncodedCharacter function with type annotations
+export const getEncodedCharacter = (num: number): string => {
   let result = '';
 
   while (num > 0) {
-    const rem = (num - 1) % 26; // 0 to 25
+    const rem = (num - 1) % 26;
     result = String.fromCharCode(65 + rem) + result;
-    num = Math.round((num - 1) / 26);
+    num = Math.floor((num - 1) / 26);
   }
 
   return result;

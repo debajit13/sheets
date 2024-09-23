@@ -1,63 +1,69 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
-  calculateRowsAndCloumnsToDisplay,
+  calculateRowsAndColumnsToDisplay,
   resizeCanvas,
   getEncodedCharacter,
 } from '../utils/utils';
+import { Change, CoordinateType } from '../types/types';
 
-// constants for cell width and cell height
+// constant values
 const cellWidth = 100;
 const cellHeight = 22;
 
-// constants for row header width and column header height
 const rowHeaderWidth = 50;
 const columnHeaderHeight = 22;
 
-// constant for color
 const headerColor = '#f8f9fa';
-const headerTextColor = '#666666';
 const gridLineColor = '#e2e3e3';
+const headerTextColor = '#666666';
 const selectionColor = '#e9f0fd';
 const selectionBorderColor = '#1b73e7';
 
-const Sheet = () => {
+const Sheet: React.FC<{
+  displayData: string[][];
+  onChange: (changes: Change[]) => void;
+}> = (props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [canvasWidth, setCanvasWidth] = useState<number>(window.innerWidth);
   const [canvasHeight, setCanvasHeight] = useState<number>(window.innerHeight);
-  const [cellsOffset, setCellsOffset] = useState<{ x: number; y: number }>({
+  const [cellsOffset, setCellsOffset] = useState<CoordinateType>({
     x: 0,
     y: 0,
   });
-  const [maxScrollArea, setMaxScrollArea] = useState<{ x: number; y: number }>({
-    x: 3000,
-    y: 3000,
+  const [maxScrollArea, setMaxScrollArea] = useState<CoordinateType>({
+    x: 5000,
+    y: 5000,
   });
-  const [selection, setSelection] = useState<{
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-  }>({ x1: -1, y1: -1, x2: -1, y2: -1 });
+
   const [selectionInProgress, setSelectionInProgress] =
     useState<boolean>(false);
+  const [selection, setSelection] = useState({
+    x1: -1,
+    y1: -1,
+    x2: -1,
+    y2: -1,
+  });
 
-  // calculate number of columns, start point and end point for each column
+  const [editCell, setEditCell] = useState<CoordinateType>({ x: -1, y: -1 });
+  const [editValue, setEditValue] = useState<string>('');
+
   const {
     visible: visibleColumns,
     start: columnStart,
     end: columnEnd,
-  } = calculateRowsAndCloumnsToDisplay(
+  } = calculateRowsAndColumnsToDisplay(
     cellWidth,
     canvasWidth,
     rowHeaderWidth,
     cellsOffset.x
   );
+
   const {
     visible: visibleRows,
     start: rowStart,
     end: rowEnd,
-  } = calculateRowsAndCloumnsToDisplay(
+  } = calculateRowsAndColumnsToDisplay(
     cellHeight,
     canvasHeight,
     columnHeaderHeight,
@@ -80,31 +86,219 @@ const Sheet = () => {
       }
     }
 
-    return {
-      x: cellX,
-      y: cellY,
-    };
+    return { x: cellX, y: cellY };
   };
 
   const cellToCoordinate = (cellX: number, cellY: number) => {
     let x = 0;
     let y = 0;
-    for (let i = 0; i < visibleColumns.length; i++) {
-      if (visibleColumns[i] === cellX) {
-        x = columnStart[i];
-        break;
-      }
+
+    let idx = visibleColumns.findIndex((i) => i === cellX);
+    if (idx !== -1) {
+      x = columnStart[idx];
+    } else {
+      x = (cellX - cellsOffset.x) * cellWidth;
     }
 
-    for (let i = 0; i < visibleRows.length; i++) {
-      if (visibleRows[i] === cellY) {
-        y = rowStart[i];
-        break;
-      }
+    idx = visibleRows.findIndex((i) => i === cellY);
+    if (idx !== -1) {
+      y = rowStart[idx];
+    } else {
+      y = (cellY - cellsOffset.y) * cellHeight;
     }
 
     return { x, y };
   };
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const canvas = canvasRef.current;
+      const context = canvas?.getContext('2d');
+
+      if (canvas) {
+        resizeCanvas(canvas);
+      }
+
+      if (context) {
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+
+        // Selecting cells
+        let selX1 = selection.x1;
+        let selX2 = selection.x2;
+
+        if (selection.x1 > selection.x2) {
+          selX1 = selection.x2;
+          selX2 = selection.x1;
+        }
+
+        let selY1 = selection.y1;
+        let selY2 = selection.y2;
+
+        if (selection.y1 > selection.y2) {
+          selY1 = selection.y2;
+          selY2 = selection.y1;
+        }
+
+        const isSelectionActive =
+          selX1 !== -1 && selY1 !== -1 && selX2 !== -1 && selY2 !== -1;
+
+        const point1 = cellToCoordinate(selX1, selY1);
+        const point2 = cellToCoordinate(selX2, selY2);
+
+        point2.x += cellWidth;
+        point2.y += cellHeight;
+
+        if (isSelectionActive) {
+          const rectWidth = point2.x - point1.x;
+          const rectHeight = point2.y - point1.y;
+
+          context.fillStyle = selectionColor;
+          context.fillRect(point1.x, point1.y, rectWidth, rectHeight);
+        }
+
+        // Draw row lines
+        let startY = columnHeaderHeight;
+
+        context.strokeStyle = gridLineColor;
+
+        for (let i = 0; i < visibleRows.length; i++) {
+          context.beginPath();
+          context.moveTo(rowHeaderWidth, startY); // x, y
+          context.lineTo(context.canvas.width, startY); // x, y
+          context.stroke();
+
+          startY += cellHeight;
+        }
+
+        // Draw col lines
+        let startX = rowHeaderWidth;
+
+        for (let i = 0; i < visibleColumns.length; i++) {
+          context.beginPath();
+          context.moveTo(startX, columnHeaderHeight); // x, y
+          context.lineTo(startX, context.canvas.height); // x, y
+          context.stroke();
+
+          startX += cellWidth;
+        }
+
+        // Draw row header
+        startY = columnHeaderHeight;
+
+        context.fillStyle = headerColor;
+        context.fillRect(0, 0, rowHeaderWidth, context.canvas.height);
+
+        for (let i = 0; i < visibleRows.length; i++) {
+          context.beginPath();
+          context.moveTo(0, startY); // x, y
+          context.lineTo(rowHeaderWidth, startY); // x, y
+          context.stroke();
+
+          startY += cellHeight;
+        }
+
+        // Draw col header
+        startX = rowHeaderWidth;
+
+        context.fillRect(0, 0, context.canvas.width, columnHeaderHeight);
+
+        for (let i = 0; i < visibleColumns.length; i++) {
+          context.beginPath();
+          context.moveTo(startX, 0); // x, y
+          context.lineTo(startX, columnHeaderHeight); // x, y
+          context.stroke();
+
+          startX += cellWidth;
+        }
+
+        // Write col header text
+        startX = rowHeaderWidth;
+
+        context.textBaseline = 'middle';
+        context.textAlign = 'center';
+        context.font = '13px sans-serif';
+        context.fillStyle = headerTextColor;
+
+        for (const col of visibleColumns) {
+          const centerX = startX + cellWidth * 0.5;
+          const centerY = columnHeaderHeight * 0.5;
+
+          const content = getEncodedCharacter(col + 1);
+          context.fillText(content, centerX, centerY);
+
+          startX += cellWidth;
+        }
+
+        // Write row header text
+        startY = columnHeaderHeight;
+
+        for (const row of visibleRows) {
+          const centerX = rowHeaderWidth * 0.5;
+          const centerY = startY + cellHeight * 0.5;
+
+          const content = String(row + 1);
+          context.fillText(content, centerX, centerY);
+
+          startY += cellHeight;
+        }
+
+        if (isSelectionActive) {
+          const rectWidth = point2.x - point1.x;
+          const rectHeight = point2.y - point1.y;
+
+          context.strokeStyle = selectionBorderColor;
+          context.rect(point1.x, point1.y, rectWidth, rectHeight);
+          context.stroke();
+        }
+
+        // Write cells content
+        let yCoord = columnHeaderHeight;
+
+        context.textBaseline = 'middle';
+        context.textAlign = 'left';
+        context.fillStyle = 'black';
+
+        for (const row of visibleRows) {
+          let xCoord = rowHeaderWidth;
+
+          for (const col of visibleColumns) {
+            const content = props?.displayData?.[row]?.[col];
+
+            if (content) {
+              const x = xCoord + 5;
+              const y = yCoord + cellHeight * 0.5;
+
+              context.fillText(content, x, y);
+            }
+
+            xCoord += cellWidth;
+          }
+          yCoord += cellHeight;
+        }
+      }
+    });
+
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    canvasWidth,
+    canvasHeight,
+    cellsOffset.x,
+    cellsOffset.y,
+    selection,
+    props.displayData,
+  ]);
+
+  useEffect(() => {
+    const resizeCanvas = () => {
+      setCanvasWidth(window.innerWidth);
+      setCanvasHeight(window.innerHeight);
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+    return () => window.removeEventListener('resize', resizeCanvas);
+  }, []);
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement; // cast target to HTMLDivElement
@@ -113,18 +307,15 @@ const Sheet = () => {
 
     const cellsOffsetInX = Math.floor(scrollX / cellWidth);
     const cellsOffsetInY = Math.floor(scrollY / cellHeight);
-
-    setCellsOffset({
-      x: cellsOffsetInX,
-      y: cellsOffsetInY,
-    });
+    setCellsOffset({ x: cellsOffsetInX, y: cellsOffsetInY });
 
     const newMaxScrollArea = { ...maxScrollArea };
-    if (newMaxScrollArea.x / scrollX < 1) {
-      maxScrollArea.x *= 1.5;
+
+    if (maxScrollArea.x / scrollX < 1) {
+      newMaxScrollArea.x *= 1.5;
     }
 
-    if (newMaxScrollArea.y / scrollY < 1) {
+    if (maxScrollArea.y / scrollY < 1) {
       newMaxScrollArea.y *= 1.5;
     }
 
@@ -140,12 +331,7 @@ const Sheet = () => {
     const sel1 = coordinateToCell(x, y); // point1
     const sel2 = { ...sel1 }; // point2
 
-    setSelection({
-      x1: sel1.x,
-      y1: sel1.y,
-      x2: sel2.x,
-      y2: sel2.y,
-    });
+    setSelection({ x1: sel1.x, y1: sel1.y, x2: sel2.x, y2: sel2.y });
   };
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
@@ -162,170 +348,147 @@ const Sheet = () => {
     setSelectionInProgress(false);
   };
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext('2d');
+  const onDoubleClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const x = e.clientX;
+    const y = e.clientY;
 
-    if (canvas) {
-      resizeCanvas(canvas);
+    const cell = coordinateToCell(x, y);
+    setEditCell({ x: cell.x, y: cell.y });
+
+    const content = props?.displayData?.[cell.y]?.[cell.x];
+    if (content) setEditValue(content);
+  };
+
+  const onCellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      props.onChange?.([{ x: editCell.x, y: editCell.y, value: editValue }]);
+      setEditValue('');
+
+      setEditCell({ x: -1, y: -1 });
     }
+  };
 
-    if (context) {
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, context.canvas.width, context.canvas.height); // set the canvas color
+  const onCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    navigator.clipboard.writeText(JSON.stringify(selection));
+  };
 
-      // selecting cells
-      let selX1 = selection.x1;
-      let selX2 = selection.x2;
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
 
-      // to make sure if user is selecting from right to left then also x1 < x2
-      if (selection.x1 > selection.x2) {
-        selX1 = selection.x2;
-        selX2 = selection.x1;
+    navigator.clipboard.readText().then((data) => {
+      try {
+        const cSelection = JSON.parse(data);
+
+        let selX1 = cSelection.x1;
+        let selX2 = cSelection.x2;
+
+        if (cSelection.x1 > cSelection.x2) {
+          selX1 = cSelection.x2;
+          selX2 = cSelection.x1;
+        }
+
+        let selY1 = cSelection.y1;
+        let selY2 = cSelection.y2;
+
+        if (cSelection.y1 > cSelection.y2) {
+          selY1 = cSelection.y2;
+          selY2 = cSelection.y1;
+        }
+
+        const xLen = Math.abs(selX1 - selX2);
+        const yLen = Math.abs(selY1 - selY2);
+
+        const changes = [];
+        for (let y = 0; y <= yLen; y++) {
+          for (let x = 0; x <= xLen; x++) {
+            const value = props.displayData?.[selY1 + y]?.[selX1 + x];
+            changes.push({ x: selection.x1 + x, y: selection.y1 + y, value });
+          }
+        }
+
+        props.onChange?.(changes);
+        setSelection({
+          x1: selection.x1,
+          y1: selection.y1,
+          x2: selection.x2 + xLen,
+          y2: selection.y2 + yLen,
+        });
+      } catch (e) {
+        console.error(e);
       }
+    });
+  };
 
-      let selY1 = selection.y1;
-      let selY2 = selection.y2;
+  const editMode = editCell.x !== -1 && editCell.y !== -1;
+  let position = { x: 0, y: 0 };
+  let editWidth = 0;
+  let editHeight = 0;
 
-      // to make sure if user is selecting from bottom to top then also y1 < y2
-      if (selection.y1 > selection.y2) {
-        selY1 = selection.y2;
-        selY2 = selection.y1;
-      }
-
-      const isSelectionActive =
-        selX1 !== -1 && selY1 !== 1 && selX2 !== -1 && selY2 !== -1;
-
-      const point1 = cellToCoordinate(selX1, selY1);
-      const point2 = cellToCoordinate(selX2, selY2);
-
-      point2.x += cellWidth;
-      point2.y += cellHeight;
-
-      if (isSelectionActive) {
-        const rectWidth = point2.x - point1.x;
-        const rectHeight = point2.y - point1.y;
-
-        context.fillStyle = selectionColor;
-        context.fillRect(point1.x, point1.y, rectWidth, rectHeight);
-      }
-
-      context.fillStyle = headerColor; // setup the header color
-      context.font = '13px sans-serif';
-
-      context.fillRect(0, 0, rowHeaderWidth, context.canvas.height); // set the row header color
-      context.fillRect(0, 0, context.canvas.width, columnHeaderHeight); // set the column header color
-      context.strokeStyle = gridLineColor;
-
-      // Draw row header
-      let startY = columnHeaderHeight; // Make sure startY is initialized
-      for (let i = 0; i < visibleRows.length; i++) {
-        context.beginPath();
-        context.moveTo(0, startY); // x, y
-        context.lineTo(rowHeaderWidth, startY); // x, y
-        context.stroke();
-        startY += cellHeight;
-      }
-
-      // column header settings
-      context.fillStyle = headerTextColor;
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-
-      // Write row header text
-      startY = columnHeaderHeight; // Initialize startY
-      for (let i = 0; i < visibleRows.length; i++) {
-        const centerY = startY + cellHeight * 0.5;
-        const centerX = rowHeaderWidth * 0.5;
-        const content = String(visibleRows[i] + 1);
-        context.fillText(content, centerX, centerY);
-        startY += cellHeight;
-      }
-
-      // Draw row lines
-      startY = columnHeaderHeight; // Make sure startY is initialized
-      for (let i = 0; i < visibleRows.length; i++) {
-        context.beginPath();
-        context.moveTo(rowHeaderWidth, startY); // x, y
-        context.lineTo(context.canvas.width, startY); // x, y
-        context.stroke();
-        startY += cellHeight;
-      }
-
-      // Draw column header
-      let startX = rowHeaderWidth; // Initialize startX
-      for (let i = 0; i < visibleColumns.length; i++) {
-        context.beginPath();
-        context.moveTo(startX, 0); // x, y
-        context.lineTo(startX, columnHeaderHeight); // x, y
-        context.stroke();
-        startX += cellWidth;
-      }
-
-      // Write column header text
-      startX = rowHeaderWidth; // Initialize startX
-      for (let i = 0; i < visibleColumns.length; i++) {
-        const centerX = startX + cellWidth * 0.5;
-        const centerY = columnHeaderHeight * 0.5;
-        const content = getEncodedCharacter(visibleColumns[i] + 1);
-        context.fillText(content, centerX, centerY);
-        startX += cellWidth;
-      }
-
-      // Draw column header text
-      startX = rowHeaderWidth; // Initialize startX
-      for (let i = 0; i < visibleColumns.length; i++) {
-        startX += cellWidth;
-      }
-
-      // Draw column lines
-      startX = rowHeaderWidth; // Initialize startX
-      for (let i = 0; i < visibleColumns.length; i++) {
-        context.beginPath();
-        context.moveTo(startX, columnHeaderHeight); // x, y
-        context.lineTo(startX, context.canvas.height); // x, y
-        context.stroke();
-        startX += cellWidth;
-      }
-      if (isSelectionActive) {
-        const rectWidth = point2.x - point1.x;
-        const rectHeight = point2.y - point2.y;
-
-        context.strokeStyle = selectionBorderColor;
-        context.rect(point1.x, point1.y, rectWidth, rectHeight);
-        context.stroke();
-      }
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasHeight, canvasWidth, cellsOffset.x, cellsOffset.y, selection]);
-
-  useEffect(() => {
-    const resizeCanvas = () => {
-      setCanvasHeight(window.innerHeight);
-      setCanvasWidth(window.innerWidth);
-    };
-
-    window.addEventListener('resize', resizeCanvas);
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-    };
-  }, []);
+  if (editMode) {
+    position = cellToCoordinate(editCell.x, editCell.y);
+    position.x += 1;
+    position.y += 1;
+    editWidth = cellWidth - 2;
+    editHeight = cellHeight - 2;
+  }
 
   return (
-    <div className='w-screen h-screen relative  overflow-hidden'>
-      <canvas ref={canvasRef} height={canvasHeight} width={canvasWidth} />
+    <div
+      style={{
+        height: '100vh',
+        width: '100vw',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <canvas ref={canvasRef} style={{ height: '100%', width: '100%' }} />
       <div
-        className='absolute w-full h-full top-0 left-0 overflow-scroll'
+        onCopy={onCopy}
+        onPaste={onPaste}
         onScroll={onScroll}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
+        onDoubleClick={onDoubleClick}
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          top: 0,
+          left: 0,
+          overflow: 'scroll',
+        }}
       >
-        <div className={`w-[${maxScrollArea.x + 2000}px] h-[1px]`} />
-        <div className={`w-[1px] h-[${maxScrollArea.y + 2000}px]`} />
+        {/* For Horizontal Scrolling */}
+        <div style={{ width: maxScrollArea.x + 2000 + 'px', height: '1px' }} />
+        {/* For Vertical Scrolling */}
+        <div style={{ width: '1px', height: maxScrollArea.y + 2000 + 'px' }} />
       </div>
+
+      {editMode && (
+        <input
+          autoFocus
+          type='text'
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={onCellKeyDown}
+          style={{
+            position: 'absolute',
+            top: position.y,
+            left: position.x,
+            width: editWidth,
+            height: editHeight,
+            outline: 'none',
+            border: 'none',
+            color: 'black',
+            fontSize: '13px',
+            fontFamily: 'sans-serif',
+          }}
+        />
+      )}
     </div>
   );
 };
+
 export default Sheet;
